@@ -304,9 +304,14 @@
     },
   };
 
-  // Auto-init from the script tag: <script ... data-lobby-slug="arenna">
-  if (typeof document !== 'undefined' && document.currentScript) {
-    var ds = document.currentScript.dataset || {};
+  // Auto-init from the script tag: <script ... data-lobby-slug="arenna">.
+  // `document.currentScript` is null for module scripts and some injection
+  // paths, so fall back to finding our own tag by its data attribute.
+  if (typeof document !== 'undefined') {
+    var tag =
+      document.currentScript ||
+      document.querySelector('script[data-lobby-slug]');
+    var ds = (tag && tag.dataset) || {};
     if (ds.lobbySlug) {
       LobbyWebMCP.init({ slug: ds.lobbySlug, apiBase: ds.lobbyApiBase });
     }
