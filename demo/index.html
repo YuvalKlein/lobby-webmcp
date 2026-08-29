@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>lobby-webmcp demo</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font: 15px/1.5 system-ui, -apple-system, sans-serif;
+      max-width: 720px; margin: 2rem auto; padding: 0 1rem;
+    }
+    h1 { font-size: 1.4rem; }
+    .status { padding: .6rem .9rem; border-radius: 8px; margin: 1rem 0; }
+    .ok  { background: #e6f6ea; color: #14532d; }
+    .no  { background: #fdf0e6; color: #7c2d12; }
+    @media (prefers-color-scheme: dark) {
+      .ok { background: #14532d; color: #dcfce7; }
+      .no { background: #7c2d12; color: #ffedd5; }
+    }
+    label { display: block; margin: .8rem 0 .2rem; font-weight: 600; }
+    input[type="text"] { width: 100%; padding: .5rem; box-sizing: border-box; }
+    button { margin: .4rem .4rem 0 0; padding: .5rem .9rem; cursor: pointer; }
+    pre {
+      background: rgba(127,127,127,.12); padding: .8rem; border-radius: 8px;
+      white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>lobby-webmcp demo</h1>
+  <p>
+    This page registers a Lobby concierge's WebMCP tools. Open it in a
+    WebMCP-enabled browser and the agent can use them; the buttons below invoke
+    the same tools by hand so humans can test without an agent.
+  </p>
+
+  <div id="host-status" class="status no">Checking for a WebMCP host…</div>
+
+  <label for="slug">Concierge slug</label>
+  <input id="slug" type="text" value="arenna" />
+  <button id="load">Load concierge</button>
+
+  <div id="tools" hidden>
+    <h2>Invoke tools by hand</h2>
+    <button data-tool="get_business_info">get_business_info</button>
+    <button data-tool="list_offerings">list_offerings</button>
+    <label for="q">ask_concierge</label>
+    <input id="q" type="text" placeholder="e.g. What services do you offer?" />
+    <button id="ask">Ask</button>
+    <pre id="out">—</pre>
+  </div>
+
+  <script src="../src/lobby-webmcp.js"></script>
+  <script>
+    var out = document.getElementById('out');
+    var statusEl = document.getElementById('host-status');
+
+    function refreshStatus() {
+      var hosted = (navigator.modelContext || document.modelContext);
+      if (hosted) {
+        statusEl.className = 'status ok';
+        statusEl.textContent = LobbyWebMCP.active
+          ? 'WebMCP host detected — tools registered: ' +
+            LobbyWebMCP.tools.map(function (t) { return t.name; }).join(', ')
+          : 'WebMCP host detected — load a concierge to register its tools.';
+      } else {
+        statusEl.className = 'status no';
+        statusEl.textContent =
+          'No WebMCP host on this page (navigator.modelContext is absent). ' +
+          'The buttons below still work — they call the tools directly.';
+      }
+    }
+
+    function show(v) {
+      out.textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+    }
+
+    function tool(name) {
+      return LobbyWebMCP.tools.find(function (t) { return t.name === name; });
+    }
+
+    document.getElementById('load').onclick = function () {
+      try {
+        LobbyWebMCP.init({ slug: document.getElementById('slug').value.trim() });
+        document.getElementById('tools').hidden = false;
+        show('Loaded. Tools ready: ' +
+          LobbyWebMCP.tools.map(function (t) { return t.name; }).join(', '));
+        refreshStatus();
+      } catch (e) { show(String(e)); }
+    };
+
+    Array.prototype.forEach.call(
+      document.querySelectorAll('button[data-tool]'),
+      function (btn) {
+        btn.onclick = function () {
+          show('…');
+          tool(btn.dataset.tool).execute({}).then(show, function (e) { show(String(e)); });
+        };
+      });
+
+    document.getElementById('ask').onclick = function () {
+      show('…');
+      tool('ask_concierge')
+        .execute({ question: document.getElementById('q').value })
+        .then(show, function (e) { show(String(e)); });
+    };
+
+    window.addEventListener('lobby-webmcp:exchange', function (e) {
+      console.log('[lobby-webmcp] exchange', e.detail);
+    });
+
+    refreshStatus();
+  </script>
+</body>
+</html>
