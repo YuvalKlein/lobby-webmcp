@@ -1,0 +1,278 @@
+{
+  "jobId": "3052759b-12b9-458f-86c0-fe568f1b7a04",
+  "url": "https://lobby.host/",
+  "emailFailed": false,
+  "stage": "done",
+  "progress": null,
+  "mechanical": {
+    "toolsCount": 8,
+    "workingToolsCount": 8,
+    "executable": true,
+    "hasCrash": false,
+    "pagesScanned": [
+      "https://lobby.host/",
+      "https://lobby.host/pricing",
+      "https://lobby.host/c/arenna",
+      "https://lobby.host/c/adi-alouf",
+      "https://lobby.host/c/hello",
+      "https://lobby.host/c/groundwork"
+    ],
+    "pagesAttempted": [
+      "https://lobby.host/",
+      "https://lobby.host/pricing",
+      "https://lobby.host/c/arenna",
+      "https://lobby.host/c/adi-alouf",
+      "https://lobby.host/c/hello",
+      "https://lobby.host/c/groundwork"
+    ],
+    "status": "ok",
+    "errors": [],
+    "timings": {
+      "totalMs": 14632
+    },
+    "apiSurface": "spec"
+  },
+  "full": {
+    "score": 88,
+    "grade": "A",
+    "status": "ok",
+    "hasCrash": false,
+    "working": 8,
+    "toolsCount": 8,
+    "dimensions": {
+      "coverage": 100,
+      "quality": 100,
+      "usability": 80,
+      "executable": 100
+    },
+    "message": "WebMCP tools were detected and reviewed.",
+    "summary": "This is a strong, coherent single-page tool surface for the Lobby product. Descriptions are unusually clear about when to prefer one tool over another, and input schemas carry sensible constraints and defaults. The main gaps are the total absence of result/output schemas across every tool and the fact that coverage is limited to the landing page ('/') with no actual booking-execution tools despite repeated references to 'booking tools'.",
+    "highlights": [
+      "Excellent cross-tool guidance and disambiguation",
+      "No result schemas on any tool",
+      "Booking referenced but no booking tool exposed",
+      "Coverage limited to a single page"
+    ],
+    "perToolNotes": [
+      {
+        "name": "ask_concierge",
+        "note": "Clear intent, good cost/usage guidance; well-bounded input but no output schema."
+      },
+      {
+        "name": "get_business_info",
+        "note": "Sensibly positioned as first-call; empty input fine, but return shape undocumented."
+      },
+      {
+        "name": "list_offerings",
+        "note": "Good bookable_only filter; missing schema for offering objects returned."
+      },
+      {
+        "name": "get_pricing",
+        "note": "Authoritative and clear; no schema describing tiers/allowances output."
+      },
+      {
+        "name": "recommend_plan",
+        "note": "Well-constrained deterministic inputs; result structure and possible plans unspecified."
+      },
+      {
+        "name": "get_setup_instructions",
+        "note": "Clear tri-state via optional boolean; output snippet shape not schematized."
+      },
+      {
+        "name": "list_customer_examples",
+        "note": "Nicely bounded limit; example object fields undocumented."
+      },
+      {
+        "name": "open_signup",
+        "note": "Good non-committal framing and navigate warning; return payload undefined."
+      }
+    ],
+    "tools": [
+      {
+        "name": "ask_concierge",
+        "kind": "act",
+        "impl": "imperative",
+        "description": "Ask this business's concierge a question in natural language — hours, policies, recommendations, anything a guest would ask at the desk. Replies come from the same knowledge and conversation engine the human-facing chat on this page uses, and context is kept across calls so follow-ups work. Use this for judgement and nuance. Do NOT use it for facts the free lookup tools already return — prefer get_business_info for contact details and list_offerings for services, which are instant and cost nothing.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 2000,
+              "description": "The visitor's question, in natural language. One question per call; the concierge answers conversationally."
+            }
+          },
+          "required": [
+            "question"
+          ]
+        },
+        "executable": true,
+        "handlerField": "execute",
+        "page": "/"
+      },
+      {
+        "name": "get_business_info",
+        "kind": "answer",
+        "impl": "imperative",
+        "description": "Verified public facts about this business: name, how it introduces itself, published contact details, the topics it invites questions about, and whether it can take a booking. Free and instant, no conversation started. Call this FIRST for anything factual — it is cheaper and more reliable than asking the concierge.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        },
+        "executable": true,
+        "handlerField": "execute",
+        "page": "/"
+      },
+      {
+        "name": "list_offerings",
+        "kind": "answer",
+        "impl": "imperative",
+        "description": "The services this business offers, as structured data an agent can compare, filter or present. Each offering carries an explicit `bookable` flag — check it before attempting to schedule anything. Free and instant.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "bookable_only": {
+              "type": "boolean",
+              "description": "When true, return only offerings that can be scheduled through the booking tools. Default false (return all)."
+            }
+          }
+        },
+        "executable": true,
+        "handlerField": "execute",
+        "page": "/"
+      },
+      {
+        "name": "get_pricing",
+        "kind": "answer",
+        "impl": "imperative",
+        "description": "Lobby's plans: prices, monthly conversation allowances, what each tier includes, and what happens on going over. Authoritative and free — use this rather than reading prices off the page, and rather than asking the concierge.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        },
+        "executable": true,
+        "handlerField": "execute",
+        "page": "/"
+      },
+      {
+        "name": "recommend_plan",
+        "kind": "act",
+        "impl": "imperative",
+        "description": "Which Lobby plan fits a described business, and why. Deterministic — it compares the stated needs against the published allowances and features, it does not guess. Prefer this over asking the concierge \"which plan should I pick\", which cannot see the numbers.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "expected_monthly_conversations": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000,
+              "description": "Roughly how many visitor sessions a month. One visitor session is one conversation however many messages it holds."
+            },
+            "number_of_sites": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "How many websites need a concierge."
+            },
+            "needs_own_branding": {
+              "type": "boolean",
+              "description": "True when the business wants the \"Built with Lobby\" footer gone."
+            },
+            "needs_booking": {
+              "type": "boolean",
+              "description": "True when visitors should be able to book an appointment through the concierge."
+            }
+          }
+        },
+        "executable": true,
+        "handlerField": "execute",
+        "page": "/"
+      },
+      {
+        "name": "get_setup_instructions",
+        "kind": "answer",
+        "impl": "imperative",
+        "description": "How a business puts Lobby on its website: the one-line embed script for an existing site, or the hosted concierge page for a business without one. Returns the actual steps and the snippet shape.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "has_existing_website": {
+              "type": "boolean",
+              "description": "True narrows the answer to the embed route, false to the hosted page. Omit for both."
+            }
+          }
+        },
+        "executable": true,
+        "handlerField": "execute",
+        "page": "/"
+      },
+      {
+        "name": "list_customer_examples",
+        "kind": "answer",
+        "impl": "imperative",
+        "description": "Live Lobby concierges an agent or a person can actually visit and try. Real published pages, not testimonials. Use these as proof when a visitor asks \"who is using this\" or \"show me one working\".",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 25,
+              "description": "How many to return. Default 6."
+            }
+          }
+        },
+        "executable": true,
+        "handlerField": "execute",
+        "page": "/"
+      },
+      {
+        "name": "open_signup",
+        "kind": "act",
+        "impl": "imperative",
+        "description": "The URL to start a Lobby account, and optionally navigate there. Signup is free and needs only an email address — no card. This is not a committing action, but it does move the visitor off the current page when `navigate` is true, so prefer returning the URL and letting them click unless they asked to be taken there.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "plan": {
+              "type": "string",
+              "enum": [
+                "free",
+                "paid"
+              ],
+              "description": "Which plan to start on. Default free."
+            },
+            "navigate": {
+              "type": "boolean",
+              "description": "When true, navigate this page to signup. Default false — navigating away ends the current conversation."
+            }
+          }
+        },
+        "executable": true,
+        "handlerField": "execute",
+        "page": "/"
+      }
+    ],
+    "suggestedJourneys": [
+      {
+        "text": "Pull Lobby's official plan pricing, then ask the deterministic recommender which plan fits a business with one website, about 500 monthly conversations, that wants booking capability but not custom br",
+        "recommended": true
+      },
+      {
+        "text": "Get the setup instructions for adding Lobby to an existing website, and retrieve a few live customer examples I can visit to see a working concierge.",
+        "recommended": false
+      },
+      {
+        "text": "Retrieve the verified business contact details and topics Lobby invites questions about, then ask the concierge whether a free plan account can have its embed script removed entirely.",
+        "recommended": false
+      }
+    ]
+  },
+  "journeyEligibility": {
+    "eligible": true,
+    "reason": null
+  },
+  "createdAt": "2026-08-31T17:42:28.313Z",
+  "error": null,
+  "queuePosition": null
+}
