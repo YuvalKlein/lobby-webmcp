@@ -453,7 +453,8 @@
           'calls so follow-ups work. Use this for judgement and nuance. Do NOT ' +
           'use it for facts the free lookup tools already return — prefer ' +
           'get_business_info for contact details and list_offerings for ' +
-          'services, which are instant and cost nothing.',
+          'services, which are instant and cost nothing. ' +
+          'Returns { ok, answer, conversation_id }.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -503,7 +504,11 @@
           'itself, published contact details, the topics it invites questions ' +
           'about, and whether it can take a booking. Free and instant, no ' +
           'conversation started. Call this FIRST for anything factual — it is ' +
-          'cheaper and more reliable than asking the concierge.',
+          'cheaper and more reliable than asking the concierge. ' +
+          'Returns { ok, name, introduction, contact { email, phone, url }, ' +
+          'suggested_topics[], booking_available }. Every Lobby tool returns ' +
+          'that same envelope: `ok`, plus `error` with `code` and `message` ' +
+          'when `ok` is false, alongside its own payload.',
         inputSchema: { type: 'object', properties: {} },
         outputSchema: baseOutput(
           {
@@ -554,7 +559,9 @@
           'The services this business offers, as structured data an agent can ' +
           'compare, filter or present. Each offering carries an explicit ' +
           '`bookable` flag — check it before attempting to schedule anything. ' +
-          'Free and instant.',
+          'Free and instant. Returns { ok, offerings[] of { id, name, ' +
+          'description, price, currency, bookable, action_url, ' +
+          'contact_required }, total, booking_available }.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -620,7 +627,9 @@
           'What can be booked with this business, and for how long. Returns ' +
           'the bookable appointment types with their durations. Call this ' +
           'before check_availability — availability is always relative to one ' +
-          'booking type, because duration determines which slots fit.',
+          'booking type, because duration determines which slots fit. ' +
+          'Returns { ok, booking_types[] of { id, name, description, ' +
+          'duration_minutes, price, currency, location_kind }, timezone }.',
         inputSchema: { type: 'object', properties: {} },
         outputSchema: baseOutput(
           {
@@ -681,7 +690,9 @@
           'Free times for one booking type in a date range. Every slot is a ' +
           'real opening: the business’s published hours minus anything already ' +
           'on its calendar. An empty list is a definite "nothing free in that ' +
-          'range", not an error — widen the range or offer to take a message.',
+          'range", not an error — widen the range or offer to take a message. ' +
+          'Returns { ok, slots[] of { start_utc, end_utc, start_local }, ' +
+          'total, timezone, searched { from_date, to_date } }.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -792,7 +803,9 @@
           'returned summary to the visitor in their own words, and only call ' +
           'it again with `confirmed: true` once they have explicitly agreed. ' +
           'Never set `confirmed: true` on the first call, and never infer ' +
-          'agreement from the visitor merely having asked about times.',
+          'agreement from the visitor merely having asked about times. ' +
+          'Returns { ok, status, summary { what, when_utc, duration_minutes, ' +
+          'guest_name, guest_email, business }, booking_id, cancel_url }.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -980,7 +993,10 @@
           "Lobby's plans: prices, monthly conversation allowances, what each " +
           'tier includes, and what happens on going over. Authoritative and ' +
           'free — use this rather than reading prices off the page, and rather ' +
-          'than asking the concierge.',
+          'than asking the concierge. Returns { ok, currency, plans[] of ' +
+          '{ id, name, price_monthly, price_annual, monthly_conversations, ' +
+          'shows_lobby_badge, includes_booking, features[], signup_url }, ' +
+          'overage, what_counts_as_a_conversation }.',
         inputSchema: { type: 'object', properties: {} },
         outputSchema: baseOutput(
           {
@@ -1029,7 +1045,9 @@
           'Which Lobby plan fits a described business, and why. Deterministic ' +
           '— it compares the stated needs against the published allowances and ' +
           'features, it does not guess. Prefer this over asking the concierge ' +
-          '"which plan should I pick", which cannot see the numbers.',
+          '"which plan should I pick", which cannot see the numbers. ' +
+          'Returns { ok, recommended_plan_id, recommended_plan_name, ' +
+          'price_monthly, reasons[], caveats[], signup_url }.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1157,7 +1175,9 @@
         description:
           'How a business puts Lobby on its website: the one-line embed script ' +
           'for an existing site, or the hosted concierge page for a business ' +
-          'without one. Returns the actual steps and the snippet shape.',
+          'without one. Returns { ok, options[] of { id, name, when_to_use, ' +
+          'steps[], snippet }, signup_url } — the actual steps and the ' +
+          'snippet shape, not a summary of them.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1206,7 +1226,9 @@
         description:
           'Live Lobby concierges an agent or a person can actually visit and ' +
           'try. Real published pages, not testimonials. Use these as proof ' +
-          'when a visitor asks "who is using this" or "show me one working".',
+          'when a visitor asks "who is using this" or "show me one working". ' +
+          'Returns { ok, examples[] of { slug, url, agent_tools_available }, ' +
+          'total }.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1272,7 +1294,8 @@
           'Signup is free and needs only an email address — no card. This is ' +
           'not a committing action, but it does move the visitor off the ' +
           'current page when `navigate` is true, so prefer returning the URL ' +
-          'and letting them click unless they asked to be taken there.',
+          'and letting them click unless they asked to be taken there. ' +
+          'Returns { ok, url, navigated, requirements[] }.',
         inputSchema: {
           type: 'object',
           properties: {
