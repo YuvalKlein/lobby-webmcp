@@ -1,16 +1,25 @@
 {
   "name": "lobby-webmcp",
   "version": "0.1.0",
-  "description": "WebMCP tools for any Lobby concierge — whatever a guest can do, a visiting agent can do too.",
+  "description": "WebMCP tools for any Lobby concierge \u2014 whatever a guest can do, a visiting agent can do too.",
   "main": "src/lobby-webmcp.js",
   "scripts": {
-    "test": "node test/smoke.mjs"
+    "test": "node test/contract.mjs && node test/manifest-e2e.mjs",
+    "test:contract": "node test/contract.mjs",
+    "test:manifest": "node test/manifest-e2e.mjs",
+    "test:smoke": "node test/smoke.mjs"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/YuvalKlein/lobby-webmcp.git"
   },
-  "keywords": ["webmcp", "model-context", "agents", "concierge", "lobby"],
+  "keywords": [
+    "webmcp",
+    "model-context",
+    "agents",
+    "concierge",
+    "lobby"
+  ],
   "author": "Yuval Klein",
   "license": "MIT"
 }

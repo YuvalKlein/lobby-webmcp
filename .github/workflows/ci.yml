@@ -1,0 +1,36 @@
+name: CI
+
+# The tool surface IS the submission. `test/contract.mjs` asserts what the
+# WebMCP directory actually grades — every tool has a description, an input
+# schema and an output schema; a concierge without booking registers no booking
+# tool; the four evaluation journeys complete through typed tools; and
+# `start_booking` refuses to commit unconfirmed. None of that ran on a push
+# until this file existed.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No `npm ci`: this package has zero dependencies on purpose — the script
+      # is vendored into customer sites and published standalone, so a
+      # dependency would be a supply-chain surface on somebody else's page.
+      # There is no lockfile to install from, and adding one would hide that.
+      - name: Contract tests + manifest end-to-end
+        run: npm test
+
+      # NOT run here. `test:smoke` talks to the live API and lobby.host, so a
+      # backend blip or a deploy in progress would fail an unrelated PR, and
+      # `--ask` spends a real conversation against the monthly cap. It is a
+      # release check, run by hand — see README.
+      - name: Note
+        run: echo "test:smoke is deliberately excluded — it hits the live API."
