@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "currency": "USD",
+  "summary": {
+    "what_it_is": "Lobby gives a business an AI concierge on its website instead of a static page. The concierge greets every visitor, answers questions about that specific business using only material the owner supplied, steers toward one goal the owner picks, and hands the business a qualified lead with a suggested reply.",
+    "who_it_suits": "Owner-operated and small service businesses whose website is a brochure and whose enquiries arrive as scattered phone calls, WhatsApp messages and unanswered forms.",
+    "who_it_does_not_suit": "Businesses needing deep integration with an existing CRM or booking system today, high-volume ecommerce support, or anything requiring the concierge to take payment.",
+    "agent_story": "Every Lobby concierge exposes the same knowledge twice: as a chat for the human visitor, and as WebMCP tools for the AI agent that visitor brings. A business installs one script and becomes usable by both without writing any tool schemas itself."
+  },
+  "plans": [
+    {
+      "id": "free",
+      "name": "Free",
+      "price_monthly": 0,
+      "price_annual": 0,
+      "monthly_conversations": 20,
+      "shows_lobby_badge": true,
+      "includes_booking": false,
+      "features": [
+        "20 conversations a month",
+        "Hosted page and embeddable widget",
+        "Instant lead emails",
+        "Boundaries: control what it will and won’t say",
+        "“Built with Lobby” footer"
+      ],
+      "signup_url": "https://lobby.host/signup"
+    },
+    {
+      "id": "paid",
+      "name": "Lobby",
+      "price_monthly": 39,
+      "price_annual": 390,
+      "monthly_conversations": 200,
+      "shows_lobby_badge": false,
+      "includes_booking": true,
+      "features": [
+        "200 conversations a month",
+        "No Lobby branding",
+        "Everything in Free",
+        "Buy more conversations any time",
+        "Cancel yourself, any time"
+      ],
+      "signup_url": "https://lobby.host/signup?plan=paid"
+    }
+  ],
+  "conversation_definition": "One visitor session, however many messages it contains. A visitor who asks eight questions is one conversation.",
+  "overage": "Nothing bad, and never a surprise charge. On the paid plan you get a buffer past your allowance and an email letting you know. Your concierge keeps working the whole time. If you need more, a pack of 100 extra conversations is $15, one click, one-off. We will never auto-charge you for going over.",
+  "setup_options": [
+    {
+      "id": "embed",
+      "name": "Embed on an existing website",
+      "when_to_use": "The business already has a website and wants the concierge to appear on it as a floating launcher.",
+      "steps": [
+        "Create a concierge at lobby.host/signup — email address only, no card.",
+        "Describe the business, or paste its website URL and let Lobby read it.",
+        "Copy the one-line script from the dashboard.",
+        "Paste it before the closing </body> tag on every page of the site."
+      ],
+      "snippet": "<script src=\"https://lobby.host/embed.js\" data-lobby-slug=\"YOUR-CONCIERGE-SLUG\" defer></script>"
+    },
+    {
+      "id": "hosted",
+      "name": "Hosted concierge page",
+      "when_to_use": "The business has no website, or wants a single shareable address that is the concierge rather than a page with a concierge on it.",
+      "steps": [
+        "Create a concierge at lobby.host/signup — email address only, no card.",
+        "Choose the address: lobby.host/c/your-business.",
+        "Share that link. It works as the business’s whole web presence."
+      ],
+      "snippet": null
+    }
+  ],
+  "urls": {
+    "pricing": "https://lobby.host/pricing",
+    "signup": "https://lobby.host/signup",
+    "llms_txt": "https://lobby.host/llms.txt"
+  }
+}
