@@ -6,6 +6,13 @@
  * rename on the backend passes every contract test and fails here, which is
  * the point.
  *
+ * **It only does that if the assertions look at the FIELDS.** On 2026-09-01 this
+ * file ran against the live backend, called `check_availability`, and passed —
+ * while the response was missing `timezone` (defaulted to 'UTC' by the tool) and
+ * naming each slot's display string `display` instead of `start_local`. The
+ * assertion was `Array.isArray(o.slots)`. A shape test that only checks the
+ * container is a shape test that cannot fail.
+ *
  * Run: node test/smoke.mjs [slug]
  *      node test/smoke.mjs arenna --ask     also spends one conversation
  *      node test/smoke.mjs --product        product surface only, no concierge
@@ -117,8 +124,40 @@ if (byName.get_booking_options) {
     const today = new Date().toISOString().slice(0, 10);
     await probe('check_availability', {
       booking_type_id: opts.booking_types[0].id, from_date: today,
+      visitor_timezone: 'America/New_York',
     }, (o) => {
       if (!Array.isArray(o.slots)) throw new Error('slots is not an array');
+      // `Array.isArray(slots)` was the whole assertion here, and it is why this
+      // file missed both live defects of 2026-09-01. `timezone` was absent from
+      // the response and defaulted to 'UTC'; every slot carried `display` where
+      // the schema says `start_local`. Neither is a type error — an agent is
+      // simply told the wrong thing, confidently.
+      //
+      // The fallback is detectable: `get_booking_options` reports the business's
+      // own zone from the same backend, so the two disagreeing with one of them
+      // reading exactly 'UTC' is the default showing through.
+      if (o.timezone === 'UTC' && opts.timezone && opts.timezone !== 'UTC') {
+        throw new Error(
+          `timezone is 'UTC' while get_booking_options says '${opts.timezone}' ` +
+          '— the availability response is missing `timezone`',
+        );
+      }
+      for (const s of o.slots) {
+        if (typeof s.start_local !== 'string') {
+          throw new Error(
+            `a slot has no string start_local (keys: ${Object.keys(s).join(', ')})`,
+          );
+        }
+        if (typeof s.start_utc !== 'string' || !s.start_utc.endsWith('Z')) {
+          throw new Error('a slot start_utc is not an absolute UTC instant');
+        }
+      }
+      // An owner with no calendar connected publishes NOTHING as of 2026-09-01,
+      // so zero slots is a legitimate answer here and not a failure. It is worth
+      // seeing though, because it looks identical to "fully booked".
+      if (!o.slots.length) {
+        console.log('  (no slots — fully booked, out of hours, or no calendar connected)');
+      }
     });
   }
   // The confirmation gate, against the live backend: this must NOT book.

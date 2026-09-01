@@ -152,9 +152,26 @@ npm run test:smoke    # against the live API; --ask spends a conversation
 description, an input schema and an output schema; a concierge without booking
 registers no booking tool; the four evaluation journeys complete through typed
 tools without falling back to `ask_concierge`; and `start_booking` refuses to
-commit unconfirmed. `test/manifest-e2e.mjs` feeds lobby-web's real
-`product.json` output to the real tools, so a shape drift between the two repos
-fails a test rather than a rescan.
+commit unconfirmed.
+
+`test/manifest-e2e.mjs` feeds the real other side to the real tools — lobby-web's
+`product.json` output, and the backend's booking contract — so a shape drift
+between repos fails a test rather than a rescan.
+
+**Every fixture standing in for another service is captured, never written.**
+That rule is the outcome of 1 Sep 2026, when the availability endpoint and
+`check_availability` disagreed on two fields in production while all 28 contract
+tests passed: the fixture had been hand-written to match the tool's own output
+schema, so the fixture and the tools agreed with each other and neither had ever
+seen the endpoint. The booking bodies now come from a captured slice of the
+backend's OpenAPI spec (`test/fixtures-openapi-booking.json`, refreshed by
+`node test/extract-booking-schema.mjs`) via `test/backend-shapes.mjs`, and the
+profile is a real `GET /lobby/agents/hello/public` response.
+
+`npm run test:smoke` hits the live API and is deliberately out of CI — a backend
+blip should not fail an unrelated PR. Its assertions look at FIELDS, not just at
+whether an array came back; that was the other half of why the same two defects
+survived a live smoke run.
 
 ## Prior work vs. challenge work
 

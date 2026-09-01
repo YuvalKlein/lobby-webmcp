@@ -105,23 +105,25 @@ const PRODUCT = {
   ],
 };
 
-const BOOKING_OPTIONS = {
-  timezone: 'Asia/Jerusalem',
-  booking_types: [
-    { id: 'intro-15', name: 'Intro call', description: '15 minutes.',
-      duration_minutes: 15, price: null, currency: null, location_kind: 'video_call' },
-  ],
-};
-
-const AVAILABILITY = {
-  timezone: 'Asia/Jerusalem',
-  slots: [
-    { start_utc: '2026-09-06T09:00:00.000Z', end_utc: '2026-09-06T09:15:00.000Z',
-      start_local: '2026-09-06 12:00' },
-    { start_utc: '2026-09-06T10:00:00.000Z', end_utc: '2026-09-06T10:15:00.000Z',
-      start_local: '2026-09-06 13:00' },
-  ],
-};
+/**
+ * The booking endpoints' responses — from the BACKEND's schema, not from here.
+ *
+ * These three used to be consts typed out in this file, and the availability one
+ * was written to match `check_availability`'s own outputSchema. The real endpoint
+ * sent no top-level `timezone` and called each slot's display string `display`
+ * rather than `start_local`, so an agent was told an `Asia/Jerusalem` business
+ * runs on UTC and read `undefined` off every slot — in production, with all 28
+ * of these tests green. The fixture and the tools agreed because one
+ * understanding wrote both.
+ *
+ * `backend-shapes.mjs` builds them from a captured slice of the backend's own
+ * OpenAPI spec instead. Values are still invented; every KEY is the backend's.
+ */
+const { OPTIONS_BODY, AVAILABILITY_BODY, BOOKING_BODY } = await import(
+  './backend-shapes.mjs'
+);
+const BOOKING_OPTIONS = OPTIONS_BODY;
+const AVAILABILITY = AVAILABILITY_BODY;
 
 // ── Harness ─────────────────────────────────────────────────────────────────
 
@@ -165,9 +167,12 @@ function load({ pathname = '/', profile = null, posts = {}, hostKind = 'document
       if (posts.bookingStatus && posts.bookingStatus >= 400) {
         return json({}, posts.bookingStatus);
       }
-      return json({ id: 'bk_1', start_utc: '2026-09-06T09:00:00.000Z',
-                    duration_minutes: 15, booking_type_name: 'Intro call',
-                    cancel_url: 'https://lobby.host/b/bk_1/cancel' });
+      // Spec-derived too. The hand-written version invented `cancel_url` — a
+      // field the backend has never sent (it returns a `cancel_token`, and there
+      // is no guest cancellation page to build a URL from), so the tool's
+      // `cancel_url` reads null on every real response and this fixture was the
+      // only place it ever looked populated.
+      return json(BOOKING_BODY);
     }
     if (u.includes('/public')) {
       if (!profile) return json({}, 404);
@@ -391,7 +396,14 @@ await check('start_booking commits only with confirmed:true', async () => {
   }));
   assert(out.ok === true, `confirmed booking failed: ${JSON.stringify(out.error)}`);
   assert(out.status === 'booked', 'status is not booked');
-  assert(out.booking_id === 'bk_1', 'no booking id returned');
+  assert(out.booking_id === BOOKING_BODY.id, `no booking id returned: ${out.booking_id}`);
+  // The summary a visitor hears must come from the response, not from the
+  // arguments echoed back. `what` fell back to the raw booking_type_id for as
+  // long as the backend did not send `booking_type_name`.
+  assert(out.summary.what === BOOKING_BODY.booking_type_name,
+    `summary.what is not the type NAME: ${out.summary.what}`);
+  assert(out.summary.when_utc === BOOKING_BODY.starts_at,
+    `summary.when_utc is not the backend's instant: ${out.summary.when_utc}`);
   assert(calls.some((c) => c.method === 'POST' && c.url.includes('/booking/bookings')),
     'confirmed booking never reached the backend');
 });
@@ -474,9 +486,17 @@ await check('journey 3b: booking asked of a concierge that can', async () => {
   const t = byName(registered);
   const options = data(await t.get_booking_options.execute({}));
   assert(options.ok && options.booking_types[0].duration_minutes === 15, 'no booking types');
+  assert(options.timezone === 'Asia/Jerusalem',
+    `the business zone did not survive: ${options.timezone}`);
   const avail = data(await t.check_availability.execute({
     booking_type_id: options.booking_types[0].id, from_date: '2026-09-06',
   }));
+  // Named individually, because these are the two fields that were actually
+  // wrong on production and "schema mismatch" would not say which.
+  assert(avail.timezone === 'Asia/Jerusalem',
+    `availability reported zone ${avail.timezone} — a 'UTC' here is the tool's fallback showing through`);
+  assert(avail.slots.every((s) => typeof s.start_local === 'string'),
+    `a slot has no start_local: ${Object.keys(avail.slots[0] ?? {}).join(', ')}`);
   assert(avail.ok && avail.total === 2, `expected 2 slots, got ${avail.total}`);
   assert(avail.slots.every((s) => s.start_utc.endsWith('Z')),
     'slots are not absolute UTC instants');
