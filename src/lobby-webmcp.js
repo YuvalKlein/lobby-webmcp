@@ -709,8 +709,8 @@
               type: 'string',
               format: 'date',
               description:
-                'Last date to consider, YYYY-MM-DD. At most 60 days after ' +
-                'from_date.',
+                'Last date to consider, YYYY-MM-DD, INCLUSIVE. Omit for a ' +
+                'single day. At most 60 days after from_date.',
             },
             visitor_timezone: {
               type: 'string',
@@ -769,7 +769,14 @@
             encodeURIComponent(args.booking_type_id) +
             '&from_date=' +
             encodeURIComponent(args.from_date);
-          if (args.to_date) q += '&to_date=' + encodeURIComponent(args.to_date);
+          // Sent ALWAYS, defaulting to a single day. The endpoint requires
+          // `to_date` and answers HTTP 400 without it, while this tool declares
+          // it optional — so an agent asking "what is free on Tuesday" with one
+          // date got `upstream_error` from a perfectly valid request. Found
+          // against production by test/smoke.mjs on 2026-09-01. Defaulting here
+          // rather than relaxing the endpoint keeps the range explicit on the
+          // wire, and matches what this tool already echoed in `searched`.
+          q += '&to_date=' + encodeURIComponent(args.to_date || args.from_date);
           if (args.visitor_timezone) {
             q += '&timezone=' + encodeURIComponent(args.visitor_timezone);
           }
@@ -805,7 +812,9 @@
           'Never set `confirmed: true` on the first call, and never infer ' +
           'agreement from the visitor merely having asked about times. ' +
           'Returns { ok, status, summary { what, when_utc, duration_minutes, ' +
-          'guest_name, guest_email, business }, booking_id, cancel_url }.',
+          'guest_name, guest_email, business }, booking_id }. `cancel_url` may ' +
+          'appear but is null today — there is no guest cancellation page yet, ' +
+          'so tell the visitor to contact the business to change or cancel.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -854,8 +863,10 @@
               enum: ['needs_confirmation', 'booked'],
               description:
                 '`needs_confirmation` means NOTHING was booked yet. `booked` ' +
-                'means the appointment exists and the confirmation email is ' +
-                'sent.',
+                'means the appointment exists and is on the business’s ' +
+                'calendar. Do not promise the visitor a confirmation email — ' +
+                'the appointment is recorded, and no email is sent to the ' +
+                'guest today.',
             },
             summary: {
               type: 'object',
@@ -961,10 +972,20 @@
           return ok({
             status: 'booked',
             booking_id: body.id || null,
+            // `starts_at` is the backend's own name for the instant; `start_utc`
+            // is what this tool calls it on the way IN. Reading only the latter
+            // meant this always fell through to echoing the argument — which
+            // happened to be right, and would have hidden a backend that booked
+            // a different time. Both are read, backend first.
+            //
+            // `cancel_url` is null on every real response today: the backend
+            // returns a `cancel_token` and no guest cancellation PAGE exists to
+            // point it at. Left declared rather than promised — see the
+            // description.
             cancel_url: body.cancel_url || null,
             summary: {
               what: body.booking_type_name || String(args.booking_type_id),
-              when_utc: body.start_utc || String(args.start_utc),
+              when_utc: body.starts_at || body.start_utc || String(args.start_utc),
               duration_minutes: body.duration_minutes,
               guest_name: name,
               guest_email: email,
