@@ -168,10 +168,15 @@ function load({ pathname = '/', profile = null, posts = {}, hostKind = 'document
         return json({}, posts.bookingStatus);
       }
       // Spec-derived too. The hand-written version invented `cancel_url` — a
-      // field the backend has never sent (it returns a `cancel_token`, and there
-      // is no guest cancellation page to build a URL from), so the tool's
-      // `cancel_url` reads null on every real response and this fixture was the
-      // only place it ever looked populated.
+      // field the backend has never sent (it returns a `cancel_token`), so the
+      // tool's `cancel_url` reads null on every real response and this fixture
+      // was the only place it ever looked populated.
+      //
+      // It still reads null, but for a different reason since 2026-09-01: a
+      // guest cancellation page now exists and the token to build the URL is in
+      // the create response, and the tool declines to pass it on — that token is
+      // the visitor's only credential for their appointment. See the note at
+      // the `cancel_url` mapping.
       return json(BOOKING_BODY);
     }
     if (u.includes('/public')) {

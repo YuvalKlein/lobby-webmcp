@@ -236,13 +236,16 @@ const d = (r) => JSON.parse(r.content[0].text);
       'the booked instant is the backend’s, not an echo of the argument',
       booked.summary?.when_utc);
 
-  // Not a failure, and worth printing: the backend sends a cancel TOKEN and
-  // there is no guest cancellation page to build a URL from, so the tool's
-  // `cancel_url` is null on every real response.
-  say(true, 'cancel_url',
+  // Null is the CORRECT answer here, not a gap — the backend's create response
+  // carries the `cancel_token`, and the tool deliberately does not pass it on:
+  // it is the visitor's only credential for their appointment, and their cancel
+  // link reaches them by email. A populated value means somebody handed a
+  // visiting agent standing power over a stranger's booking, so this asserts.
+  say(booked.cancel_url === null,
+      'cancel_url is withheld — the cancel token is the visitor’s credential',
       booked.cancel_url === null
-        ? 'null — backend sends cancel_token and no guest cancel page exists yet'
-        : String(booked.cancel_url));
+        ? 'null — the visitor’s cancel link goes to them by email'
+        : `LEAKED: ${booked.cancel_url}`);
 }
 
 console.log(bad

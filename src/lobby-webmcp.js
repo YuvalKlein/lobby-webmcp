@@ -812,9 +812,13 @@
           'Never set `confirmed: true` on the first call, and never infer ' +
           'agreement from the visitor merely having asked about times. ' +
           'Returns { ok, status, summary { what, when_utc, duration_minutes, ' +
-          'guest_name, guest_email, business }, booking_id }. `cancel_url` may ' +
-          'appear but is null today — there is no guest cancellation page yet, ' +
-          'so tell the visitor to contact the business to change or cancel.',
+          'guest_name, guest_email, business }, booking_id }. The visitor is ' +
+          'emailed a confirmation with a calendar invitation attached and ' +
+          'their own cancellation link, so to change or cancel, point them at ' +
+          'that email rather than at the business. `cancel_url` is null here ' +
+          'and stays null on purpose: that link is the visitor’s only ' +
+          'credential for their appointment and it is not handed to a tool ' +
+          'caller.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -863,10 +867,12 @@
               enum: ['needs_confirmation', 'booked'],
               description:
                 '`needs_confirmation` means NOTHING was booked yet. `booked` ' +
-                'means the appointment exists and is on the business’s ' +
-                'calendar. Do not promise the visitor a confirmation email — ' +
-                'the appointment is recorded, and no email is sent to the ' +
-                'guest today.',
+                'means the appointment exists, is on the business’s calendar, ' +
+                'and a confirmation email has gone to the address given — ' +
+                'carrying a calendar invitation and the visitor’s own ' +
+                'cancellation link. Tell them to expect it. The appointment ' +
+                'itself does not depend on that email: `booked` is the record, ' +
+                'and a mail delay is not a booking that failed.',
             },
             summary: {
               type: 'object',
@@ -978,10 +984,22 @@
             // happened to be right, and would have hidden a backend that booked
             // a different time. Both are read, backend first.
             //
-            // `cancel_url` is null on every real response today: the backend
-            // returns a `cancel_token` and no guest cancellation PAGE exists to
-            // point it at. Left declared rather than promised — see the
-            // description.
+            // `cancel_url` is null on every real response, and that is now a
+            // CHOICE rather than a gap. A guest cancellation page does exist as
+            // of 2026-09-01, and the backend's create response carries the
+            // `cancel_token` this tool would need to build the URL — so the
+            // field is one line away from being populated.
+            //
+            // It is deliberately not. That token is the visitor's ONLY
+            // credential for their appointment: whoever holds it can cancel a
+            // named stranger's booking, with no login and no second factor.
+            // Handing it to a visiting agent would give a third party standing
+            // power over a person's calendar entry, to hold or to leak, for a
+            // convenience the visitor already has — the link is in the
+            // confirmation email, addressed to them.
+            //
+            // Populate this only when there is a reason a caller must cancel on
+            // the visitor's behalf, and give that reason its own thought.
             cancel_url: body.cancel_url || null,
             summary: {
               what: body.booking_type_name || String(args.booking_type_id),
