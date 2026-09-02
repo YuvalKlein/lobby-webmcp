@@ -42,6 +42,7 @@ both, because it genuinely is both — a live concierge and the product story.
 | `get_booking_options` | What can be booked, and for how long. |
 | `check_availability` | Real openings for one booking type: published hours minus what is already on the calendar. |
 | `start_booking` | Books a slot. **Two-step by construction** — see below. |
+| `cancel_booking` | Cancels an appointment using the guest's own token from their confirmation email. Two-step, and gated on that token — never on a booking id. |
 
 ### Product — lobby.host itself
 
@@ -72,10 +73,28 @@ schemas are the least settled part of the proposal, so registration retries
 once without the key if a host rejects it: a tool loses its declared contract
 rather than its existence.
 
-**The one committing action cannot commit by accident.** `start_booking` called
-without `confirmed: true` makes no network call at all and returns the summary
-the visitor must agree to. Confirmation is a required second call, not a flag
-an agent can set on the first.
+**A committing action cannot commit by accident.** `start_booking` and
+`cancel_booking` called without `confirmed: true` write nothing and return the
+summary the visitor must agree to. Confirmation is a required second call, not a
+flag an agent can set on the first. `cancel_booking`'s gate is the stricter of
+the two: it makes no network call whatsoever, where `start_booking`'s reads the
+(already cached) public profile to name the business.
+
+**Cancelling is authorized by the guest's secret, not by an identifier.**
+`cancel_booking` takes `cancel_token` — the secret in the guest's own
+confirmation email — and has no input for a booking id at all. The distinction
+is the entire security model, and it is not theoretical: `start_booking` returns
+a `booking_id`, so an agent holding one is the normal case, and a tool that
+accepted it would let any caller cancel any stranger's appointment by
+enumeration. A UUID passed as the token is refused by name before any request
+goes out, and the token is never echoed back in a result, so it does not outlive
+the call in a transcript or a context window.
+
+For the same reason `start_booking` returns `cancel_url: null` even though the
+backend's create response does carry the token. The capability an agent needs is
+now a tool it can call when the visitor volunteers their own link — not a
+credential handed to it unasked, for an appointment it may have booked for
+someone else.
 
 ## Use it on any page
 
@@ -133,7 +152,13 @@ by hand against any slug.
 - `ask_concierge` → lazily `POST /lobby/agents/:slug/conversations` once per
   page session, then `POST /lobby/conversations/:id/messages`, accumulating
   the SSE `token` events into a complete reply.
-- Booking tools → `GET|POST /lobby/agents/:slug/booking/*`.
+- Booking tools → `GET|POST /lobby/agents/:slug/booking/*`. `cancel_booking` is
+  the exception: `POST /lobby/bookings/:cancel_token/cancel`, which names no
+  business, because the token is the whole authorization. One consequence worth
+  knowing is that a visitor can cancel from any Lobby page, not only the one
+  they booked on. That endpoint releases the slot, emails both the guest and the
+  business, and removes the calendar entry — the same path the link in the
+  confirmation email takes, not a second one.
 - Product tools → `GET <site>/webmcp/product.json`, served by lobby-web from
   its own pricing content, so an agent and a person are never quoted different
   numbers. The one exception is `list_customer_examples`, which reads
@@ -151,7 +176,8 @@ npm run test:smoke    # against the live API; --ask spends a conversation
 `test/contract.mjs` asserts what the directory actually grades: every tool has a
 description, an input schema and an output schema; a concierge without booking
 registers no booking tool; the four evaluation journeys complete through typed
-tools without falling back to `ask_concierge`; and `start_booking` refuses to
+tools without falling back to `ask_concierge`; `cancel_booking` refuses a
+booking id and never echoes its token; and `start_booking` refuses to
 commit unconfirmed.
 
 `test/manifest-e2e.mjs` feeds the real other side to the real tools — lobby-web's

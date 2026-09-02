@@ -171,6 +171,40 @@ if (byName.get_booking_options) {
   } else {
     console.log('\n✓ start_booking gate → refused unconfirmed, nothing booked');
   }
+
+  // ── cancel_booking, against the real endpoint ────────────────────────────
+  //
+  // Both checks are safe to run against production. The gate makes no network
+  // call at all, and the probe uses a token that cannot exist, so nothing
+  // real is ever cancelled here. Nothing else could be: cancelling for real
+  // needs a live guest's secret, which is exactly the property under test.
+  const cancelGate = data(await byName.cancel_booking.execute({
+    cancel_token: '0'.repeat(48),
+  }));
+  if (cancelGate.error?.code !== 'confirmation_required') {
+    console.error('\n✗ cancel_booking gate → unconfirmed call was not refused');
+    failed++;
+  } else {
+    console.log('\n✓ cancel_booking gate → refused unconfirmed, nothing cancelled');
+  }
+
+  // The one thing only a live run can prove: that the backend's 404 for an
+  // unknown token arrives as a typed `invalid_input` and not as a crash or a
+  // bare status code. The contract test asserts this against a stub; this
+  // asserts the stub was right about the real thing.
+  const unknown = data(await byName.cancel_booking.execute({
+    cancel_token: '0'.repeat(48), confirmed: true,
+  }));
+  if (unknown.ok !== false || unknown.error?.code !== 'invalid_input') {
+    console.error(
+      `\n✗ cancel_booking unknown token → expected invalid_input, got ${JSON.stringify(unknown)}`,
+    );
+    failed++;
+  } else {
+    console.log(
+      `\n✓ cancel_booking unknown token → ${unknown.error.code}: ${unknown.error.message}`,
+    );
+  }
 } else {
   console.log('\n(booking tools not registered — this concierge has none configured)');
 }

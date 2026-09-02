@@ -119,9 +119,8 @@ const PRODUCT = {
  * `backend-shapes.mjs` builds them from a captured slice of the backend's own
  * OpenAPI spec instead. Values are still invented; every KEY is the backend's.
  */
-const { OPTIONS_BODY, AVAILABILITY_BODY, BOOKING_BODY } = await import(
-  './backend-shapes.mjs'
-);
+const { OPTIONS_BODY, AVAILABILITY_BODY, BOOKING_BODY, CANCELLED_BODY } =
+  await import('./backend-shapes.mjs');
 const BOOKING_OPTIONS = OPTIONS_BODY;
 const AVAILABILITY = AVAILABILITY_BODY;
 
@@ -160,6 +159,15 @@ function load({ pathname = '/', profile = null, posts = {}, hostKind = 'document
       return json({ data: [{ slug: 'arenna', updated_at: '2026-08-01' },
                             { slug: 'groundwork', updated_at: '2026-08-02' }],
                     total: 2, truncated: false });
+    }
+    // Before the others: the cancel path is `/lobby/bookings/<token>/cancel`,
+    // which shares no substring with `/booking/<thing>`, so it would otherwise
+    // fall through to the `unexpected fetch` throw.
+    if (u.includes('/cancel')) {
+      if (posts.cancelStatus && posts.cancelStatus >= 400) {
+        return json({}, posts.cancelStatus);
+      }
+      return json(CANCELLED_BODY);
     }
     if (u.includes('/booking/options')) return json(BOOKING_OPTIONS);
     if (u.includes('/booking/availability')) return json(AVAILABILITY);
@@ -261,7 +269,8 @@ await check('a concierge without booking registers NO booking tool', async () =>
   const { api, registered } = load({ pathname: '/c/plainco', profile: PROFILE_NO_BOOKING });
   await api.init({ slug: 'plainco' });
   const names = registered.map((t) => t.name);
-  for (const forbidden of ['get_booking_options', 'check_availability', 'start_booking']) {
+  for (const forbidden of ['get_booking_options', 'check_availability', 'start_booking',
+                           'cancel_booking']) {
     assert(!names.includes(forbidden),
       `${forbidden} registered on a concierge with no booking configured`);
   }
@@ -296,11 +305,12 @@ await check('an unknown booking shape fails closed', () => {
   assert(cap({ booking: { enabled: true } }).booking === true, 'explicit true not honoured');
 });
 
-await check('a concierge WITH booking registers all three booking tools', async () => {
+await check('a concierge WITH booking registers all four booking tools', async () => {
   const { api, registered } = load({ pathname: '/c/bookco', profile: PROFILE_WITH_BOOKING });
   await api.init({ slug: 'bookco' });
   const names = registered.map((t) => t.name);
-  for (const wanted of ['get_booking_options', 'check_availability', 'start_booking']) {
+  for (const wanted of ['get_booking_options', 'check_availability', 'start_booking',
+                        'cancel_booking']) {
     assert(names.includes(wanted), `${wanted} missing on a booking-enabled concierge`);
   }
 });
@@ -435,6 +445,160 @@ await check('a placeholder email is refused before any network call', async () =
   }));
   assert(out.ok === false && out.error.code === 'invalid_input',
     'an invalid address was accepted');
+});
+
+// ── Cancellation: the token IS the authorization ────────────────────────────
+//
+// `cancel_booking` is the only tool that acts on a booking made in an earlier
+// session, so it is the only one whose authorization cannot come from the page
+// it runs on. It comes from the guest's own cancellation token, pasted in from
+// their confirmation email. Two properties matter more than anything else here
+// and both are asserted below:
+//
+//   1. It can NEVER be driven by a booking id. A booking id is a database
+//      identifier that appears in `start_booking`'s own output and in an
+//      owner's dashboard; accepting one would mean any caller could cancel any
+//      stranger's appointment by guessing or enumerating ids. The token is a
+//      48-hex-character secret with a uniqueness constraint behind it.
+//   2. It never repeats the token back. The result is the one place a token
+//      could leak into a transcript, a log, or a model's context window that
+//      outlives the call.
+
+const CANCEL_TOKEN = 'a1b2c3d4e5f6'.repeat(4); // 48 hex chars, like the backend's
+
+await check('cancel_booking takes a cancel_token and NO booking id', async () => {
+  const { api, registered } = load({ pathname: '/c/bookco', profile: PROFILE_WITH_BOOKING });
+  await api.init({ slug: 'bookco' });
+  const t = byName(registered).cancel_booking;
+  const props = Object.keys(t.inputSchema.properties);
+  assert(props.includes('cancel_token'), 'cancel_booking does not take a cancel_token');
+  assert(t.inputSchema.required.includes('cancel_token'), 'cancel_token is not required');
+  for (const forbidden of ['booking_id', 'id', 'guest_email', 'booking']) {
+    assert(!props.includes(forbidden),
+      `cancel_booking accepts ${forbidden} — a booking can then be cancelled by ` +
+      'enumeration rather than by the guest\'s own secret');
+  }
+  assert(props.length === 2, `unexpected inputs: ${props.join(', ')}`);
+});
+
+await check('cancel_booking cancels nothing, and calls NOTHING, unconfirmed', async () => {
+  const { api, registered, calls } = load({ pathname: '/c/bookco', profile: PROFILE_WITH_BOOKING });
+  await api.init({ slug: 'bookco' });
+  const before = calls.length;
+  const out = data(await byName(registered).cancel_booking.execute({
+    cancel_token: CANCEL_TOKEN,
+  }));
+  assert(out.ok === false, 'an unconfirmed cancellation reported success');
+  assert(out.error.code === 'confirmation_required', `wrong code: ${out.error.code}`);
+  assert(out.status === 'needs_confirmation', 'status did not say nothing happened');
+  assert(out.summary && out.summary.business === 'Book Co',
+    'no summary naming the business to read back to the visitor');
+  // Stricter than start_booking's gate, which is allowed its profile fetch.
+  // There is no endpoint that previews a booking by token, so an unconfirmed
+  // cancel has nothing to ask and must ask nothing.
+  assert(calls.length === before,
+    `the confirmation gate made ${calls.length - before} network call(s)`);
+});
+
+await check('the cancel token is never echoed back in the result', async () => {
+  const { api, registered } = load({ pathname: '/c/bookco', profile: PROFILE_WITH_BOOKING });
+  await api.init({ slug: 'bookco' });
+  const t = byName(registered).cancel_booking;
+  for (const args of [{ cancel_token: CANCEL_TOKEN },
+                      { cancel_token: CANCEL_TOKEN, confirmed: true }]) {
+    const raw = JSON.stringify(data(await t.execute(args)));
+    assert(!raw.includes(CANCEL_TOKEN),
+      `the token appears in the result of ${JSON.stringify(args)} — it is the ` +
+      'visitor\'s only credential and must not outlive the call');
+  }
+});
+
+await check('cancel_booking commits only with confirmed:true', async () => {
+  const { api, registered, calls } = load({ pathname: '/c/bookco', profile: PROFILE_WITH_BOOKING });
+  await api.init({ slug: 'bookco' });
+  const out = data(await byName(registered).cancel_booking.execute({
+    cancel_token: CANCEL_TOKEN, confirmed: true,
+  }));
+  assert(out.ok === true, `confirmed cancellation failed: ${JSON.stringify(out.error)}`);
+  assert(out.status === 'cancelled', `status is not cancelled: ${out.status}`);
+  // From the backend's body, not hardcoded — the fixture deliberately makes
+  // these two distinguishable.
+  assert(out.summary.when_utc === CANCELLED_BODY.starts_at,
+    `when_utc is not the backend's instant: ${out.summary.when_utc}`);
+  const posted = calls.filter((c) => c.method === 'POST' && c.url.includes('/cancel'));
+  assert(posted.length === 1, `expected one POST to cancel, got ${posted.length}`);
+  assert(posted[0].url.includes('/lobby/bookings/'),
+    `cancel hit the wrong path: ${posted[0].url}`);
+  assert(!posted[0].url.includes('/agents/'),
+    'the cancel path names a business — the token is the whole authorization');
+});
+
+await check('a booking id passed as the token is refused before any network call', async () => {
+  const { api, registered, calls } = load({ pathname: '/c/bookco', profile: PROFILE_WITH_BOOKING });
+  await api.init({ slug: 'bookco' });
+  const before = calls.length;
+  // 36 characters, so a bare length check would let it through — this is the
+  // mistake an agent actually makes: it has `booking_id` from start_booking.
+  const out = data(await byName(registered).cancel_booking.execute({
+    cancel_token: '3f8a1c2e-9b47-4d51-8e0a-7c6b5d4e3f2a', confirmed: true,
+  }));
+  assert(out.ok === false && out.error.code === 'invalid_input',
+    `a booking id was accepted as a cancel token: ${JSON.stringify(out)}`);
+  assert(/cancellation link|booking id/i.test(out.error.message),
+    `the message does not explain the mixup: ${out.error.message}`);
+  assert(calls.length === before, 'a rejected token still reached the backend');
+});
+
+await check('a too-short token is refused before any network call', async () => {
+  const { api, registered, calls } = load({ pathname: '/c/bookco', profile: PROFILE_WITH_BOOKING });
+  await api.init({ slug: 'bookco' });
+  const before = calls.length;
+  const out = data(await byName(registered).cancel_booking.execute({
+    cancel_token: 'abc123', confirmed: true,
+  }));
+  assert(out.ok === false && out.error.code === 'invalid_input',
+    'a 6-character token was sent to the backend');
+  assert(calls.length === before, 'a short-token probe reached the backend');
+});
+
+await check('an unknown token is a typed failure, not a crash', async () => {
+  const { api, registered } = load({
+    pathname: '/c/bookco', profile: PROFILE_WITH_BOOKING, posts: { cancelStatus: 404 },
+  });
+  await api.init({ slug: 'bookco' });
+  const out = data(await byName(registered).cancel_booking.execute({
+    cancel_token: CANCEL_TOKEN, confirmed: true,
+  }));
+  assert(out.ok === false && out.error.code === 'invalid_input',
+    `a 404 should be invalid_input, got ${JSON.stringify(out.error)}`);
+});
+
+await check('an appointment too late to cancel is typed and actionable', async () => {
+  const { api, registered } = load({
+    pathname: '/c/bookco', profile: PROFILE_WITH_BOOKING, posts: { cancelStatus: 400 },
+  });
+  await api.init({ slug: 'bookco' });
+  const out = data(await byName(registered).cancel_booking.execute({
+    cancel_token: CANCEL_TOKEN, confirmed: true,
+  }));
+  assert(out.ok === false && out.error.code === 'unavailable',
+    `a 400 should be unavailable, got ${JSON.stringify(out.error)}`);
+  assert(/contact|business/i.test(out.error.message),
+    `the message offers no next step: ${out.error.message}`);
+});
+
+await check('a throttled cancellation says so rather than reading as invalid', async () => {
+  const { api, registered } = load({
+    pathname: '/c/bookco', profile: PROFILE_WITH_BOOKING, posts: { cancelStatus: 429 },
+  });
+  await api.init({ slug: 'bookco' });
+  const out = data(await byName(registered).cancel_booking.execute({
+    cancel_token: CANCEL_TOKEN, confirmed: true,
+  }));
+  assert(out.ok === false && out.error.code === 'upstream_error',
+    `a 429 should be upstream_error, got ${JSON.stringify(out.error)}`);
+  assert(!/not valid/i.test(out.error.message),
+    'a throttle was reported as an invalid link — the visitor would re-check a good token');
 });
 
 // ── The four evaluation journeys (handoff §12) ──────────────────────────────
