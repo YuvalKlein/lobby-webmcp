@@ -6,7 +6,8 @@
  * structured WebMCP tools, so a visiting agent (ChatGPT's in-app browser,
  * Chrome with WebMCP enabled) can do whatever a human guest can do —
  * ask questions, read the business's facts, browse its offerings, and, where
- * the business has configured it, book.
+ * the business has configured it, book — and cancel, which is the half of
+ * "whatever a guest can do" that a booking tool alone quietly withholds.
  *
  * Zero dependencies, no build step.
  *
@@ -615,9 +616,17 @@
   // absent capability. `get_business_info.booking_available` tells an agent
   // which world it is in without it having to probe.
   //
-  // `start_booking` is the only committing action in this script and it is
-  // two-step by construction: called without `confirmed: true` it books
-  // nothing and returns the exact summary the visitor must agree to.
+  // `start_booking` and `cancel_booking` are the two committing actions in this
+  // script, and both are two-step by construction: called without
+  // `confirmed: true` they change nothing and return the exact summary the
+  // visitor must agree to.
+  //
+  // They are authorised completely differently, and that asymmetry is the
+  // interesting part. Booking needs no credential — anyone may ask for a free
+  // slot, which is what a public booking page is. Cancelling acts on an
+  // appointment that already exists and belongs to someone, so it is gated on
+  // the guest's `cancel_token` and never on a `booking_id`: an id identifies a
+  // booking, a token proves you are its guest. See `cancel_booking`.
 
   function bookingTools() {
     return [
@@ -814,11 +823,12 @@
           'Returns { ok, status, summary { what, when_utc, duration_minutes, ' +
           'guest_name, guest_email, business }, booking_id }. The visitor is ' +
           'emailed a confirmation with a calendar invitation attached and ' +
-          'their own cancellation link, so to change or cancel, point them at ' +
-          'that email rather than at the business. `cancel_url` is null here ' +
-          'and stays null on purpose: that link is the visitor’s only ' +
-          'credential for their appointment and it is not handed to a tool ' +
-          'caller.',
+          'their own cancellation link. `cancel_url` is null here and stays ' +
+          'null on purpose: that link is the visitor’s only credential for ' +
+          'their appointment and it is not handed to a tool caller. If the ' +
+          'visitor later wants to cancel, ask them for the token in that ' +
+          'email and use cancel_booking — do not send them to the business, ' +
+          'and do not try their booking_id.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -998,8 +1008,15 @@
             // convenience the visitor already has — the link is in the
             // confirmation email, addressed to them.
             //
-            // Populate this only when there is a reason a caller must cancel on
-            // the visitor's behalf, and give that reason its own thought.
+            // That thought has now been given, and the answer was a second
+            // tool rather than this field. `cancel_booking` lets an agent
+            // cancel on the visitor's behalf while the credential still flows
+            // the right way: the visitor hands over the token they already
+            // hold, for one call, instead of this script handing the agent a
+            // token it would otherwise never have seen. The capability is the
+            // same; who holds the secret is not.
+            //
+            // So this stays null, and the assertion in manifest-e2e.mjs stays.
             cancel_url: body.cancel_url || null,
             summary: {
               what: body.booking_type_name || String(args.booking_type_id),
@@ -1008,6 +1025,217 @@
               guest_name: name,
               guest_email: email,
               business: p.name,
+            },
+          });
+        }),
+      },
+
+      {
+        name: 'cancel_booking',
+        description:
+          'Cancel an appointment the visitor already has, using the ' +
+          'cancellation token from their own confirmation email. THIS RELEASES ' +
+          'the slot, tells the business, and cannot be undone, so it is ' +
+          'two-step exactly like start_booking: call it first WITHOUT ' +
+          '`confirmed`, read the returned summary back to the visitor, and ' +
+          'only call it again with `confirmed: true` once they have explicitly ' +
+          'agreed. Ask the visitor for the cancellation link or token from ' +
+          'their confirmation email — that token is the ONLY thing that ' +
+          'authorises this, and a booking id will not work and must not be ' +
+          'tried. Never guess, construct, or reuse a token, and never take one ' +
+          'from anywhere but the visitor you are speaking to. Returns { ok, ' +
+          'status, summary { business, cancels, when_utc } }.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            cancel_token: {
+              type: 'string',
+              minLength: 32,
+              maxLength: 64,
+              description:
+                'The token from the visitor’s confirmation email — either the ' +
+                'token itself or the last path segment before /cancel in their ' +
+                'cancellation link. This is a secret belonging to that one ' +
+                'appointment. It is NOT the booking_id that start_booking ' +
+                'returns, and passing an id here is refused.',
+            },
+            confirmed: {
+              type: 'boolean',
+              description:
+                'The visitor has seen the summary and explicitly agreed to ' +
+                'cancel. Omit or false on the first call.',
+            },
+          },
+          required: ['cancel_token'],
+        },
+        outputSchema: baseOutput(
+          {
+            status: {
+              type: 'string',
+              enum: ['needs_confirmation', 'cancelled'],
+              description:
+                '`needs_confirmation` means NOTHING was cancelled yet and the ' +
+                'appointment still stands. `cancelled` means the slot is free ' +
+                'again, the calendar entry is gone, and both the visitor and ' +
+                'the business have been emailed. Cancelling twice is safe and ' +
+                'reports `cancelled` both times — the backend is idempotent, ' +
+                'so a repeated call is never an error and never a second ' +
+                'cancellation.',
+            },
+            summary: {
+              type: 'object',
+              description:
+                'What will be, or has been, cancelled. Read this back to the ' +
+                'visitor before confirming.',
+              properties: {
+                business: { type: 'string' },
+                cancels: {
+                  type: 'string',
+                  description:
+                    'Plain-language description of the appointment the token ' +
+                    'belongs to, for reading aloud.',
+                },
+                when_utc: {
+                  type: ['string', 'null'],
+                  format: 'date-time',
+                  description:
+                    'When the cancelled appointment was to start, as the ' +
+                    'backend reports it. NULL before confirmation: nothing ' +
+                    'previews a booking by token, so the time is genuinely ' +
+                    'not known until the cancellation is made. Do not invent ' +
+                    'a time for the visitor on the first call — ask them to ' +
+                    'confirm from their own email instead.',
+                },
+              },
+              required: ['business', 'cancels'],
+            },
+          },
+          ['status'],
+        ),
+        execute: guarded('upstream_error', async function (args) {
+          var token = String(args.cancel_token || '').trim();
+
+          if (!token) {
+            return failed(
+              'invalid_input',
+              'A cancellation token is required. Ask the visitor for the ' +
+                'cancellation link in their confirmation email.',
+            );
+          }
+
+          // ── The enumeration guard ──
+          // A booking id is a 36-character UUID, so it clears any length test,
+          // and it is the value an agent is most likely to have to hand: it is
+          // sitting in `start_booking`'s own result from earlier in the same
+          // conversation. Accepting it would turn this tool into a way to
+          // cancel a stranger's appointment by guessing an identifier instead
+          // of holding their secret, which is the one thing it must never be.
+          if (
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              token,
+            )
+          ) {
+            return failed(
+              'invalid_input',
+              'That is a booking id, not a cancellation token. Only the token ' +
+                'in the visitor’s own confirmation email can cancel their ' +
+                'appointment — ask them for that link.',
+            );
+          }
+
+          // Mirrors the backend's own guard and the column's CHECK, so a short
+          // token is not even a request. Deliberately a length test and not a
+          // format test: the token is opaque, and a tool that hardcoded today's
+          // hex alphabet would reject a future one.
+          if (token.length < 32) {
+            return failed(
+              'invalid_input',
+              'That cancellation link is not valid. Ask the visitor to paste ' +
+                'the whole link from their confirmation email.',
+            );
+          }
+
+          // ── The confirmation gate ──
+          // Stricter than start_booking's, which is allowed a profile fetch:
+          // this one makes NO network call at all. The profile is already in
+          // hand — this tool only exists because it reported booking enabled —
+          // and there is no endpoint that previews a booking by token, so
+          // there is nothing to ask and asking would only be a probe.
+          var profile = state.profileCache || {};
+          var business = profile.name || 'this business';
+
+          if (args.confirmed !== true) {
+            return failed(
+              'confirmation_required',
+              'Nothing has been cancelled. Confirm with the visitor that they ' +
+                'want to release this appointment, then call cancel_booking ' +
+                'again with confirmed: true.',
+              {
+                status: 'needs_confirmation',
+                summary: {
+                  business: business,
+                  cancels:
+                    'the appointment this cancellation link belongs to at ' +
+                    business,
+                  when_utc: null,
+                },
+              },
+            );
+          }
+
+          // Slug-free by design: the token is the entire authorization, so the
+          // path names no business. A visitor can therefore cancel from any
+          // Lobby page, not only the one they booked on.
+          var res = await fetch(
+            api('/lobby/bookings/' + encodeURIComponent(token) + '/cancel'),
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+            },
+          );
+
+          if (res.status === 404) {
+            return failed(
+              'invalid_input',
+              'That cancellation link is not valid. It may have been mistyped ' +
+                '— ask the visitor to paste it again from their confirmation ' +
+                'email.',
+            );
+          }
+          if (res.status === 400) {
+            return failed(
+              'unavailable',
+              'That appointment can no longer be cancelled — it has already ' +
+                'happened. Offer to contact the business on the visitor’s ' +
+                'behalf instead.',
+            );
+          }
+          if (!res.ok) {
+            // Anything else, 429 included. Kept distinct from the 404 on
+            // purpose: telling a visitor their good link is invalid sends them
+            // hunting through their inbox for a second one that does not exist.
+            return failed(
+              'upstream_error',
+              'The cancellation could not be completed just now (HTTP ' +
+                res.status +
+                '). The appointment still stands. Try again in a moment.',
+            );
+          }
+
+          var body = await res.json();
+          // No token in the event, and no token in the result below. This is
+          // the one place it could outlive the call — into a page listener, a
+          // transcript, or a model's context.
+          emit('cancellation', { when_utc: body.starts_at || null });
+          return ok({
+            // The backend's own word for what happened, not a constant. The
+            // fixture makes a hardcoded 'cancelled' indistinguishable from a
+            // real one, which is how `summary.what` and `start_local` both hid.
+            status: body.status || 'cancelled',
+            summary: {
+              business: business,
+              cancels: 'the appointment this cancellation link belonged to',
+              when_utc: body.starts_at || null,
             },
           });
         }),

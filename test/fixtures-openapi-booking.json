@@ -148,6 +148,21 @@
           "guest_email",
           "cancel_token"
         ]
+      },
+      "LobbyBookingCancelledDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "starts_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "starts_at"
+        ]
       }
     }
   },
@@ -206,6 +221,33 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LobbyBookingCreatedDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lobby/bookings/{cancelToken}/cancel": {
+      "post": {
+        "operationId": "LobbyBookingPublicController_cancel",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LobbyBookingCancelledDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LobbyBookingCancelledDto"
                 }
               }
             }

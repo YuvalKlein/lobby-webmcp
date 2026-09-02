@@ -33,11 +33,18 @@ const SCHEMAS = [
   'LobbyAvailabilityDto',
   'LobbyBookingSlotDto',
   'LobbyBookingCreatedDto',
+  'LobbyBookingCancelledDto',
 ];
 const PATHS = {
   '/lobby/agents/{slug}/booking/options': ['get'],
   '/lobby/agents/{slug}/booking/availability': ['get'],
   '/lobby/agents/{slug}/booking/bookings': ['post'],
+  // Guest cancellation. Slug-free on purpose: the token is the entire
+  // authorization, so the path names no business. Only the POST is captured —
+  // the GET on the same path returns the guest's HTML confirmation page, which
+  // exists because email link scanners GET every URL in a message, and is not a
+  // contract any tool reads.
+  '/lobby/bookings/{cancelToken}/cancel': ['post'],
 };
 
 const spec = JSON.parse(readFileSync(SPEC_PATH, 'utf8'));

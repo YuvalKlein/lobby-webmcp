@@ -65,6 +65,12 @@ export function fromSchema(node, hint = '') {
   if (hint === 'end_utc' || hint === 'ends_at') return '2026-09-08T12:15:00.000Z';
   if (hint === 'start_local') return 'Tue, Sep 8, 3:00 PM';
   if (hint === 'status') return 'confirmed';
+  // 48 hex characters, the shape `randomBytes(24).toString('hex')` produces and
+  // the `length >= 32` CHECK on the column enforces. The generic `stub-<hint>`
+  // was 17 characters, so `cancel_booking` refused it as too short and the
+  // cancellation leg of the e2e failed for a reason that was purely about this
+  // file — which is worth a hint rather than a weaker guard.
+  if (hint === 'cancel_token') return 'a1b2c3d4e5f6'.repeat(4);
   if (hint === 'guest_email') return 'guest@example.test';
   if (hint === 'currency') return 'ILS';
   if (hint === 'price') return '0.00';
@@ -83,6 +89,45 @@ export const AVAILABILITY_BODY = fromSchema(
 );
 export const BOOKING_BODY = fromSchema(
   responseSchema('/lobby/agents/{slug}/booking/bookings', 'post'),
+);
+
+/**
+ * Set realistic values on a spec-shaped body WITHOUT letting an override
+ * invent a key.
+ *
+ * `fromSchema`'s value hints are keyed on the property name alone, so `status`
+ * gets `'confirmed'` everywhere — right for a created booking, wrong for a
+ * cancelled one. Overriding the value is fine (this file's whole contract is
+ * "every KEY is the backend's, values are invented"), but a plain spread would
+ * also happily ADD `status` back if the backend renamed it, which is the one
+ * failure this file exists to catch. So an override for a key the schema does
+ * not declare is an error, not a merge.
+ */
+function withValues(node, values) {
+  const body = fromSchema(node);
+  for (const [key, value] of Object.entries(values)) {
+    if (!(key in body)) {
+      throw new Error(
+        `cannot override ${key}: the captured schema does not declare it — ` +
+          're-extract the fixture, and check whether the backend renamed it',
+      );
+    }
+    body[key] = value;
+  }
+  return body;
+}
+
+/**
+ * The guest cancellation response.
+ *
+ * `status` is overridden because the shared hint says `'confirmed'`, and a
+ * cancellation that reports `confirmed` would let the tool hardcode
+ * `'cancelled'` and still pass — hiding exactly the echo-the-argument defect
+ * that `summary.what` and `start_local` both were.
+ */
+export const CANCELLED_BODY = withValues(
+  responseSchema('/lobby/bookings/{cancelToken}/cancel', 'post'),
+  { status: 'cancelled' },
 );
 
 /** Field names the backend declares, for a test that wants to name one. */

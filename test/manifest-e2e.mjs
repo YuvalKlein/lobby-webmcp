@@ -61,6 +61,7 @@ const {
   OPTIONS_BODY,
   AVAILABILITY_BODY,
   BOOKING_BODY,
+  CANCELLED_BODY,
   declaredKeys,
   validateAgainstOutputSchema: validate,
 } = await import('./backend-shapes.mjs');
@@ -149,6 +150,9 @@ const d = (r) => JSON.parse(r.content[0].text);
       '/booking/options': OPTIONS_BODY,
       '/booking/availability': AVAILABILITY_BODY,
       '/booking/bookings': BOOKING_BODY,
+      // `/lobby/bookings/<token>/cancel` — no slug in the path, so it shares no
+      // substring with the three above.
+      '/cancel': CANCELLED_BODY,
       // Least specific last: `/public` also matches the paths above on some
       // backends, so ordering here is load-bearing.
       '/public': PROFILE,
@@ -157,7 +161,8 @@ const d = (r) => JSON.parse(r.content[0].text);
   await api.init({ slug: 'hello' });
   const t = byName(registered);
 
-  say(!!t.check_availability && !!t.get_booking_options && !!t.start_booking,
+  say(!!t.check_availability && !!t.get_booking_options && !!t.start_booking
+        && !!t.cancel_booking,
       'a live profile with booking.enabled registers the booking tools',
       Object.keys(t).length + ' tools');
 
@@ -246,6 +251,61 @@ const d = (r) => JSON.parse(r.content[0].text);
       booked.cancel_url === null
         ? 'null — the visitor’s cancel link goes to them by email'
         : `LEAKED: ${booked.cancel_url}`);
+
+  // ── Cancellation, the other half of the booking capability ────────────────
+  //
+  // The token here is the one the backend just sent in the create response.
+  // That is the ONLY place it legitimately comes from in this test, and in
+  // production it reaches the agent one step further round: through the
+  // visitor's email, and then out of the visitor's own mouth.
+  const token = BOOKING_BODY.cancel_token;
+  say(typeof token === 'string' && token.length >= 32,
+      'the backend’s create response carries a usable cancel_token',
+      `${typeof token} of length ${String(token).length}`);
+
+  const gateOff = d(await t.cancel_booking.execute({ cancel_token: token }));
+  say(gateOff.error?.code === 'confirmation_required',
+      'cancel_booking refuses to cancel unconfirmed', gateOff.error?.code);
+  say(gateOff.summary?.when_utc === null,
+      'the unconfirmed summary invents no appointment time',
+      gateOff.summary?.when_utc === null
+        ? 'null — nothing previews a booking by token'
+        : `INVENTED: ${gateOff.summary?.when_utc}`);
+
+  const cancelled = d(await t.cancel_booking.execute({
+    cancel_token: token, confirmed: true,
+  }));
+  const cancelProblems = validate(t.cancel_booking, cancelled);
+  say(cancelled.ok && !cancelProblems.length, 'cancel_booking matches its own schema',
+      cancelProblems.join('; ') || `status ${cancelled.status}`);
+
+  // The same echo-the-argument defect that hid in `summary.what` and
+  // `start_local`: the fixture says `cancelled` where the shared value hint
+  // would have said `confirmed`, so a hardcoded constant here shows up.
+  say(cancelled.status === CANCELLED_BODY.status,
+      'the cancelled status is the backend’s word, not a constant',
+      `${cancelled.status} (backend sent ${CANCELLED_BODY.status})`);
+  say(cancelled.summary?.when_utc === CANCELLED_BODY.starts_at,
+      'the cancelled instant is the backend’s, not an echo',
+      cancelled.summary?.when_utc);
+
+  // The whole security model in one line. A booking id is in scope for an
+  // agent — it is in `booked.booking_id` right here — so this is the mistake
+  // that is actually available to make.
+  const byId = d(await t.cancel_booking.execute({
+    cancel_token: booked.booking_id, confirmed: true,
+  }));
+  say(byId.ok === false && byId.error?.code === 'invalid_input',
+      'a booking id cannot cancel a booking',
+      byId.ok ? 'ACCEPTED — cancellable by enumeration' : byId.error?.code);
+
+  // The token must not survive the call in anything the caller keeps.
+  const anyEcho = [gateOff, cancelled].some((r) => JSON.stringify(r).includes(token));
+  say(!anyEcho, 'no cancel_booking result repeats the token back',
+      anyEcho ? 'ECHOED — the credential outlives the call' : 'withheld');
+
+  const cancelKeys = declaredKeys('LobbyBookingCancelledDto');
+  say(true, 'backend cancellation fields', cancelKeys.join(', '));
 }
 
 console.log(bad
