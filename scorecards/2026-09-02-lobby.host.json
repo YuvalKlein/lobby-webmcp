@@ -1,0 +1,1278 @@
+{
+    "jobId": "3e534726-b981-4bdc-8977-a2e79c0fe1d2",
+    "url": "https://lobby.host/",
+    "emailFailed": false,
+    "stage": "done",
+    "progress": null,
+    "mechanical": {
+        "toolsCount": 11,
+        "workingToolsCount": 11,
+        "executable": true,
+        "hasCrash": false,
+        "pagesScanned": [
+            "https://lobby.host/",
+            "https://lobby.host/pricing",
+            "https://lobby.host/c/hello",
+            "https://lobby.host/c/arenna",
+            "https://lobby.host/c/adi-alouf",
+            "https://lobby.host/c/groundwork"
+        ],
+        "pagesAttempted": [
+            "https://lobby.host/",
+            "https://lobby.host/pricing",
+            "https://lobby.host/c/hello",
+            "https://lobby.host/c/arenna",
+            "https://lobby.host/c/adi-alouf",
+            "https://lobby.host/c/groundwork"
+        ],
+        "status": "ok",
+        "errors": [],
+        "timings": {
+            "totalMs": 14619
+        },
+        "apiSurface": "spec"
+    },
+    "full": {
+        "score": 88,
+        "grade": "A",
+        "status": "ok",
+        "hasCrash": false,
+        "working": 11,
+        "toolsCount": 11,
+        "dimensions": {
+            "coverage": 100,
+            "quality": 100,
+            "usability": 80,
+            "executable": 100
+        },
+        "message": "WebMCP tools were detected and reviewed.",
+        "summary": "This is a strong, coherent tool surface for a Lobby concierge/marketing site, with a consistent result envelope, precise input/output schemas, and well-articulated safety guidance (notably the two-step booking confirmation and UTC slot handling). Coverage spans info, offerings, pricing, recommendation, setup, examples, signup, and a complete booking flow, with clear guidance on when to prefer cheap lookups over the concierge. Minor gaps keep it from a 5: all tools live on a single page, ask_concierge overlaps intent with several lookup tools, and a few enums/constraints could be tighter. Overall an agent could call these reliably.",
+        "highlights": [
+            "Consistent ok/error envelope across all tools",
+            "Excellent booking safety and confirmation flow",
+            "ask_concierge overlaps with lookup tools",
+            "All tools on one page; thin page coverage"
+        ],
+        "perToolNotes": [
+            {
+                "name": "ask_concierge",
+                "note": "Clear anti-overlap guidance, but intent still overlaps lookups; free-text fallback risks misuse."
+            },
+            {
+                "name": "get_business_info",
+                "note": "Well-scoped facts tool with full result schema; good 'call first' framing."
+            },
+            {
+                "name": "list_offerings",
+                "note": "Strong structured output with explicit bookable/contact_required flags; useful filter param."
+            },
+            {
+                "name": "get_pricing",
+                "note": "Authoritative, well-typed plan schema; enum-constrained plan ids are a plus."
+            },
+            {
+                "name": "recommend_plan",
+                "note": "Deterministic with sensible bounded inputs and reasons/caveats; solid."
+            },
+            {
+                "name": "get_setup_instructions",
+                "note": "Returns real steps/snippet; optional narrowing param is clear."
+            },
+            {
+                "name": "list_customer_examples",
+                "note": "Simple, bounded limit; useful proof tool, minimal schema but adequate."
+            },
+            {
+                "name": "open_signup",
+                "note": "Good navigation caution and non-committing framing; clear params."
+            },
+            {
+                "name": "get_booking_options",
+                "note": "Clear prerequisite for availability; duration/location_kind well modeled."
+            },
+            {
+                "name": "check_availability",
+                "note": "Excellent UTC/local handling and empty-list semantics; 60-day cap sensible."
+            },
+            {
+                "name": "start_booking",
+                "note": "Exemplary two-step commit safety and cancel_url handling; among the best-described tools."
+            }
+        ],
+        "tools": [
+            {
+                "name": "ask_concierge",
+                "kind": "act",
+                "impl": "imperative",
+                "description": "Ask this business's concierge a question in natural language \u2014 hours, policies, recommendations, anything a guest would ask at the desk. Replies come from the same knowledge and conversation engine the human-facing chat on this page uses, and context is kept across calls so follow-ups work. Use this for judgement and nuance. Do NOT use it for facts the free lookup tools already return \u2014 prefer get_business_info for contact details and list_offerings for services, which are instant and cost nothing. Returns { ok, answer, conversation_id }.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "question": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 2000,
+                            "description": "The visitor's question, in natural language. One question per call; the concierge answers conversationally."
+                        }
+                    },
+                    "required": [
+                        "question"
+                    ]
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "answer": {
+                            "type": "string",
+                            "description": "The concierge's reply, in full."
+                        },
+                        "conversation_id": {
+                            "type": "string",
+                            "description": "The conversation this reply belongs to. Stable across calls on this page."
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "answer"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            },
+            {
+                "name": "get_business_info",
+                "kind": "answer",
+                "impl": "imperative",
+                "description": "Verified public facts about this business: name, how it introduces itself, published contact details, the topics it invites questions about, and whether it can take a booking. Free and instant, no conversation started. Call this FIRST for anything factual \u2014 it is cheaper and more reliable than asking the concierge. Returns { ok, name, introduction, contact { email, phone, url }, suggested_topics[], booking_available }. Every Lobby tool returns that same envelope: `ok`, plus `error` with `code` and `message` when `ok` is false, alongside its own payload.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "introduction": {
+                            "type": "string",
+                            "description": "How the business introduces itself to a visitor."
+                        },
+                        "contact": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Published contact details, or null if none.",
+                            "properties": {
+                                "email": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ]
+                                },
+                                "phone": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ]
+                                },
+                                "url": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ],
+                                    "format": "uri"
+                                }
+                            }
+                        },
+                        "suggested_topics": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Topics this concierge is prepared to discuss."
+                        },
+                        "booking_available": {
+                            "type": "boolean",
+                            "description": "True when this concierge exposes booking tools. When false, nothing here can be scheduled \u2014 offer the contact details instead of implying a booking is possible."
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "name",
+                        "introduction",
+                        "booking_available"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            },
+            {
+                "name": "list_offerings",
+                "kind": "answer",
+                "impl": "imperative",
+                "description": "The services this business offers, as structured data an agent can compare, filter or present. Each offering carries an explicit `bookable` flag \u2014 check it before attempting to schedule anything. Free and instant. Returns { ok, offerings[] of { id, name, description, price, currency, bookable, action_url, contact_required }, total, booking_available }.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "bookable_only": {
+                            "type": "boolean",
+                            "description": "When true, return only offerings that can be scheduled through the booking tools. Default false (return all)."
+                        }
+                    }
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "offerings": {
+                            "type": "array",
+                            "description": "The business\u2019s services, comparable and filterable.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string",
+                                        "description": "Stable id to pass to other tools."
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "price": {
+                                        "type": [
+                                            "number",
+                                            "string",
+                                            "null"
+                                        ],
+                                        "description": "Null when the business does not publish a price."
+                                    },
+                                    "currency": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    },
+                                    "bookable": {
+                                        "type": "boolean",
+                                        "description": "True only when this specific offering can be scheduled through the booking tools. Never assume a bookable offering from the presence of a booking tool."
+                                    },
+                                    "action_url": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "uri"
+                                    },
+                                    "contact_required": {
+                                        "type": "boolean",
+                                        "description": "True when arranging this offering needs a human \u2014 use the contact details from get_business_info."
+                                    }
+                                },
+                                "required": [
+                                    "id",
+                                    "name",
+                                    "description",
+                                    "bookable"
+                                ]
+                            }
+                        },
+                        "total": {
+                            "type": "integer"
+                        },
+                        "booking_available": {
+                            "type": "boolean",
+                            "description": "Whether this concierge can book at all. False means every offering is contact-only regardless of its own flag."
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "offerings",
+                        "total",
+                        "booking_available"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            },
+            {
+                "name": "get_pricing",
+                "kind": "answer",
+                "impl": "imperative",
+                "description": "Lobby's plans: prices, monthly conversation allowances, what each tier includes, and what happens on going over. Authoritative and free \u2014 use this rather than reading prices off the page, and rather than asking the concierge. Returns { ok, currency, plans[] of { id, name, price_monthly, price_annual, monthly_conversations, shows_lobby_badge, includes_booking, features[], signup_url }, overage, what_counts_as_a_conversation }.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "currency": {
+                            "type": "string"
+                        },
+                        "plans": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string",
+                                        "enum": [
+                                            "free",
+                                            "paid"
+                                        ]
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "price_monthly": {
+                                        "type": [
+                                            "number",
+                                            "null"
+                                        ]
+                                    },
+                                    "price_annual": {
+                                        "type": [
+                                            "number",
+                                            "null"
+                                        ]
+                                    },
+                                    "monthly_conversations": {
+                                        "type": [
+                                            "integer",
+                                            "null"
+                                        ]
+                                    },
+                                    "shows_lobby_badge": {
+                                        "type": "boolean"
+                                    },
+                                    "includes_booking": {
+                                        "type": "boolean",
+                                        "description": "Whether concierges on this plan can take bookings."
+                                    },
+                                    "features": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "signup_url": {
+                                        "type": "string",
+                                        "format": "uri"
+                                    }
+                                },
+                                "required": [
+                                    "id",
+                                    "name",
+                                    "features"
+                                ]
+                            }
+                        },
+                        "overage": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        },
+                        "what_counts_as_a_conversation": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "plans",
+                        "currency"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            },
+            {
+                "name": "recommend_plan",
+                "kind": "act",
+                "impl": "imperative",
+                "description": "Which Lobby plan fits a described business, and why. Deterministic \u2014 it compares the stated needs against the published allowances and features, it does not guess. Prefer this over asking the concierge \"which plan should I pick\", which cannot see the numbers. Returns { ok, recommended_plan_id, recommended_plan_name, price_monthly, reasons[], caveats[], signup_url }.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "expected_monthly_conversations": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 1000000,
+                            "description": "Roughly how many visitor sessions a month. One visitor session is one conversation however many messages it holds."
+                        },
+                        "number_of_sites": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "How many websites need a concierge."
+                        },
+                        "needs_own_branding": {
+                            "type": "boolean",
+                            "description": "True when the business wants the \"Built with Lobby\" footer gone."
+                        },
+                        "needs_booking": {
+                            "type": "boolean",
+                            "description": "True when visitors should be able to book an appointment through the concierge."
+                        }
+                    }
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "recommended_plan_id": {
+                            "type": "string",
+                            "enum": [
+                                "free",
+                                "paid"
+                            ]
+                        },
+                        "recommended_plan_name": {
+                            "type": "string"
+                        },
+                        "price_monthly": {
+                            "type": [
+                                "number",
+                                "null"
+                            ]
+                        },
+                        "reasons": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Why this plan, in order of weight."
+                        },
+                        "caveats": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Things the visitor should know before committing. May be empty."
+                        },
+                        "signup_url": {
+                            "type": "string",
+                            "format": "uri"
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "recommended_plan_id",
+                        "recommended_plan_name",
+                        "reasons",
+                        "signup_url"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            },
+            {
+                "name": "get_setup_instructions",
+                "kind": "answer",
+                "impl": "imperative",
+                "description": "How a business puts Lobby on its website: the one-line embed script for an existing site, or the hosted concierge page for a business without one. Returns { ok, options[] of { id, name, when_to_use, steps[], snippet }, signup_url } \u2014 the actual steps and the snippet shape, not a summary of them.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "has_existing_website": {
+                            "type": "boolean",
+                            "description": "True narrows the answer to the embed route, false to the hosted page. Omit for both."
+                        }
+                    }
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "options": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string",
+                                        "enum": [
+                                            "embed",
+                                            "hosted"
+                                        ]
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "when_to_use": {
+                                        "type": "string"
+                                    },
+                                    "steps": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "snippet": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "id",
+                                    "name",
+                                    "when_to_use",
+                                    "steps"
+                                ]
+                            }
+                        },
+                        "signup_url": {
+                            "type": "string",
+                            "format": "uri"
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "options",
+                        "signup_url"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            },
+            {
+                "name": "list_customer_examples",
+                "kind": "answer",
+                "impl": "imperative",
+                "description": "Live Lobby concierges an agent or a person can actually visit and try. Real published pages, not testimonials. Use these as proof when a visitor asks \"who is using this\" or \"show me one working\". Returns { ok, examples[] of { slug, url, agent_tools_available }, total }.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 25,
+                            "description": "How many to return. Default 6."
+                        }
+                    }
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "examples": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "slug": {
+                                        "type": "string"
+                                    },
+                                    "url": {
+                                        "type": "string",
+                                        "format": "uri"
+                                    },
+                                    "agent_tools_available": {
+                                        "type": "boolean",
+                                        "description": "Every hosted concierge page registers WebMCP tools, so an agent can visit and use it directly."
+                                    }
+                                },
+                                "required": [
+                                    "slug",
+                                    "url"
+                                ]
+                            }
+                        },
+                        "total": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "examples",
+                        "total"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            },
+            {
+                "name": "open_signup",
+                "kind": "act",
+                "impl": "imperative",
+                "description": "The URL to start a Lobby account, and optionally navigate there. Signup is free and needs only an email address \u2014 no card. This is not a committing action, but it does move the visitor off the current page when `navigate` is true, so prefer returning the URL and letting them click unless they asked to be taken there. Returns { ok, url, navigated, requirements[] }.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "plan": {
+                            "type": "string",
+                            "enum": [
+                                "free",
+                                "paid"
+                            ],
+                            "description": "Which plan to start on. Default free."
+                        },
+                        "navigate": {
+                            "type": "boolean",
+                            "description": "When true, navigate this page to signup. Default false \u2014 navigating away ends the current conversation."
+                        }
+                    }
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "url": {
+                            "type": "string",
+                            "format": "uri"
+                        },
+                        "navigated": {
+                            "type": "boolean"
+                        },
+                        "requirements": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "What the visitor needs in order to sign up."
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "url",
+                        "navigated"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            },
+            {
+                "name": "get_booking_options",
+                "kind": "answer",
+                "impl": "imperative",
+                "description": "What can be booked with this business, and for how long. Returns the bookable appointment types with their durations. Call this before check_availability \u2014 availability is always relative to one booking type, because duration determines which slots fit. Returns { ok, booking_types[] of { id, name, description, duration_minutes, price, currency, location_kind }, timezone }.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "booking_types": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "duration_minutes": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                    },
+                                    "price": {
+                                        "type": [
+                                            "number",
+                                            "null"
+                                        ]
+                                    },
+                                    "currency": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    },
+                                    "location_kind": {
+                                        "type": "string",
+                                        "enum": [
+                                            "video_call",
+                                            "phone",
+                                            "in_person",
+                                            "unspecified"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "id",
+                                    "name",
+                                    "duration_minutes"
+                                ]
+                            }
+                        },
+                        "timezone": {
+                            "type": "string",
+                            "description": "IANA zone the business keeps its hours in. Slot times are returned as absolute UTC instants regardless, so a visitor in another zone is never offered a time that does not exist."
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "booking_types",
+                        "timezone"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            },
+            {
+                "name": "check_availability",
+                "kind": "answer",
+                "impl": "imperative",
+                "description": "Free times for one booking type in a date range. Every slot is a real opening: the business\u2019s published hours minus anything already on its calendar. An empty list is a definite \"nothing free in that range\", not an error \u2014 widen the range or offer to take a message. Returns { ok, slots[] of { start_utc, end_utc, start_local }, total, timezone, searched { from_date, to_date } }.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "booking_type_id": {
+                            "type": "string",
+                            "description": "From get_booking_options."
+                        },
+                        "from_date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "First date to consider, YYYY-MM-DD."
+                        },
+                        "to_date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Last date to consider, YYYY-MM-DD, INCLUSIVE. Omit for a single day. At most 60 days after from_date."
+                        },
+                        "visitor_timezone": {
+                            "type": "string",
+                            "description": "The visitor's IANA timezone, if known (e.g. 'Europe/Berlin'). Slot times are echoed in it for display. Omit and the business\u2019s own zone is used."
+                        }
+                    },
+                    "required": [
+                        "booking_type_id",
+                        "from_date"
+                    ]
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "slots": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "start_utc": {
+                                        "type": "string",
+                                        "format": "date-time"
+                                    },
+                                    "end_utc": {
+                                        "type": "string",
+                                        "format": "date-time"
+                                    },
+                                    "start_local": {
+                                        "type": "string",
+                                        "description": "Same instant, formatted in visitor_timezone, for showing a person. Never pass this back \u2014 pass start_utc."
+                                    }
+                                },
+                                "required": [
+                                    "start_utc",
+                                    "end_utc"
+                                ]
+                            }
+                        },
+                        "total": {
+                            "type": "integer"
+                        },
+                        "timezone": {
+                            "type": "string"
+                        },
+                        "searched": {
+                            "type": "object",
+                            "properties": {
+                                "from_date": {
+                                    "type": "string",
+                                    "format": "date"
+                                },
+                                "to_date": {
+                                    "type": "string",
+                                    "format": "date"
+                                }
+                            }
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "slots",
+                        "total",
+                        "timezone"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            },
+            {
+                "name": "start_booking",
+                "kind": "transact",
+                "impl": "imperative",
+                "description": "Book one of the free slots from check_availability. THIS COMMITS the visitor to an appointment and emails the business, so it is deliberately two-step: call it first WITHOUT `confirmed`, show the returned summary to the visitor in their own words, and only call it again with `confirmed: true` once they have explicitly agreed. Never set `confirmed: true` on the first call, and never infer agreement from the visitor merely having asked about times. Returns { ok, status, summary { what, when_utc, duration_minutes, guest_name, guest_email, business }, booking_id }. The visitor is emailed a confirmation with a calendar invitation attached and their own cancellation link, so to change or cancel, point them at that email rather than at the business. `cancel_url` is null here and stays null on purpose: that link is the visitor\u2019s only credential for their appointment and it is not handed to a tool caller.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "booking_type_id": {
+                            "type": "string",
+                            "description": "From get_booking_options."
+                        },
+                        "start_utc": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Exactly as returned by check_availability. Do not construct or round this yourself."
+                        },
+                        "guest_name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120,
+                            "description": "The name the visitor gave you, as they gave it. This is what the business will see on the appointment."
+                        },
+                        "guest_email": {
+                            "type": "string",
+                            "format": "email",
+                            "maxLength": 320,
+                            "description": "Where the confirmation goes. Ask the visitor; never invent, guess or reuse an address from elsewhere on the page."
+                        },
+                        "notes": {
+                            "type": "string",
+                            "maxLength": 1000,
+                            "description": "Anything the business should know beforehand."
+                        },
+                        "confirmed": {
+                            "type": "boolean",
+                            "description": "The visitor has seen the summary and explicitly agreed. Omit or false on the first call."
+                        }
+                    },
+                    "required": [
+                        "booking_type_id",
+                        "start_utc",
+                        "guest_name",
+                        "guest_email"
+                    ]
+                },
+                "executable": true,
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {
+                            "type": "boolean",
+                            "description": "False when the request could not be fulfilled."
+                        },
+                        "error": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "description": "Present only when ok is false.",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "enum": [
+                                        "not_configured",
+                                        "unavailable",
+                                        "confirmation_required",
+                                        "invalid_input",
+                                        "upstream_error"
+                                    ]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "code",
+                                "message"
+                            ]
+                        },
+                        "status": {
+                            "type": "string",
+                            "enum": [
+                                "needs_confirmation",
+                                "booked"
+                            ],
+                            "description": "`needs_confirmation` means NOTHING was booked yet. `booked` means the appointment exists, is on the business\u2019s calendar, and a confirmation email has gone to the address given \u2014 carrying a calendar invitation and the visitor\u2019s own cancellation link. Tell them to expect it. The appointment itself does not depend on that email: `booked` is the record, and a mail delay is not a booking that failed."
+                        },
+                        "summary": {
+                            "type": "object",
+                            "description": "Exactly what will be, or has been, booked. Read this back to the visitor verbatim before confirming.",
+                            "properties": {
+                                "what": {
+                                    "type": "string"
+                                },
+                                "when_utc": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                },
+                                "duration_minutes": {
+                                    "type": "integer"
+                                },
+                                "guest_name": {
+                                    "type": "string"
+                                },
+                                "guest_email": {
+                                    "type": "string"
+                                },
+                                "business": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "booking_id": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "description": "Set only when status is `booked`."
+                        },
+                        "cancel_url": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "format": "uri"
+                        }
+                    },
+                    "required": [
+                        "ok",
+                        "status"
+                    ]
+                },
+                "handlerField": "execute",
+                "page": "/"
+            }
+        ],
+        "suggestedJourneys": [
+            {
+                "text": "I have an existing website and want to add Lobby to it, so get the exact embed script snippet and setup steps for integrating it into my current site.",
+                "recommended": true
+            },
+            {
+                "text": "I run a single website and expect about 500 visitor conversations a month where guests can book appointments directly through the concierge, and I need my own branding without the Lobby footer, so rec",
+                "recommended": false
+            },
+            {
+                "text": "Find out if this business accepts bookings, and if so, retrieve the available appointment types and their durations so I can see what I can schedule.",
+                "recommended": false
+            }
+        ]
+    },
+    "journeyEligibility": {
+        "eligible": true,
+        "reason": null
+    },
+    "createdAt": "2026-09-02T09:24:25.050Z",
+    "error": null,
+    "queuePosition": null
+}
